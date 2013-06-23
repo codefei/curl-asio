@@ -174,13 +174,15 @@ public:
         } type;
     };
     
-    typedef boost::function<data_action::type(const boost::asio::const_buffer&)> data_read_handler;
-    typedef boost::function<void(CURLcode)> done_handler;
-    
     class transfer: public boost::enable_shared_from_this<transfer>,
                     private boost::noncopyable
     {
     public:
+        class info;
+        
+        typedef boost::function<data_action::type(const boost::asio::const_buffer&)> data_read_handler;
+        typedef boost::function<void(const info&,CURLcode)> done_handler;
+        
         struct options
         {
             long protocols;
@@ -213,6 +215,120 @@ public:
                   accept_all_supported_encodings(true)
             {
             }
+        };
+        
+        class info: public boost::noncopyable
+        {
+        public:
+            class timeinfo
+            {
+            public:
+                double total;
+                double namelookup;
+                double connect;
+                double appconnect;
+                double pretransfer;
+                double starttransfer;
+                double redirect;
+                
+            private:
+                friend class info;
+                
+                timeinfo(const info &i)
+                {
+                    if (!i.get_info(CURLINFO_TOTAL_TIME, total))
+                        total = 0.0;
+                    if (!i.get_info(CURLINFO_NAMELOOKUP_TIME, namelookup))
+                        namelookup = 0.0;
+                    if (!i.get_info(CURLINFO_CONNECT_TIME, connect))
+                        connect = 0.0;
+                    if (!i.get_info(CURLINFO_APPCONNECT_TIME, appconnect))
+                        appconnect = 0.0;
+                    if (!i.get_info(CURLINFO_PRETRANSFER_TIME, pretransfer))
+                        pretransfer = 0.0;
+                    if (!i.get_info(CURLINFO_STARTTRANSFER_TIME, starttransfer))
+                        starttransfer = 0.0;
+                    if (!i.get_info(CURLINFO_REDIRECT_TIME, redirect))
+                        redirect = 0.0;
+                }
+            };
+            
+            std::string effective_url() const
+            {
+                std::string ret;
+                get_info(CURLINFO_EFFECTIVE_URL, ret);
+                return ret;
+            }
+            
+            long response_code() const
+            {
+                long ret = 0;
+                get_info(CURLINFO_RESPONSE_CODE, ret);
+                return ret;
+            }
+            
+            long http_connect_code() const
+            {
+                long ret = 0;
+                get_info(CURLINFO_HTTP_CONNECTCODE, ret);
+                return ret;
+            }
+            
+            const timeinfo times() const
+            {
+                return timeinfo(*this);
+            }
+            
+            long redirect_count() const
+            {
+                long ret = 0;
+                get_info(CURLINFO_REDIRECT_COUNT, ret);
+                return ret;
+            }
+            
+            std::string redirect_url() const
+            {
+                std::string ret;
+                get_info(CURLINFO_REDIRECT_URL, ret);
+                return ret;
+            }
+            
+        private:
+            friend class transfer;
+            friend class timeinfo;
+            
+            info(CURL*& handle)
+                : handle_(handle)
+            {
+            }
+            
+            bool get_info(CURLINFO option, std::string &val) const
+            {
+                const char *str = NULL;
+                CURLcode rc = curl_easy_getinfo(handle_, option, &str);
+                if (rc == CURLE_OK)
+                {
+                    if (str)
+                        val = str;
+                    else
+                        val.clear();
+                    return true;
+                }
+                
+                return false;
+            }
+            
+            bool get_info(CURLINFO option, long &val) const
+            {
+                return curl_easy_getinfo(handle_, option, &val) == CURLE_OK;
+            }
+            
+            bool get_info(CURLINFO option, double &val) const
+            {
+                return curl_easy_getinfo(handle_, option, &val) == CURLE_OK;
+            }
+            
+            CURL*& handle_;
         };
         
         virtual ~transfer()
@@ -391,7 +507,7 @@ public:
         {
             CURL_ASIO_LOG("transfer::handle_done: result=%d", result);
             if (on_done)
-                on_done(result);
+                on_done(info(handle_), result);
             running_ = false;
         }
         
