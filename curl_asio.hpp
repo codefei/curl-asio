@@ -190,6 +190,7 @@ public:
         class info;
         
         typedef boost::function<data_action::type(const boost::asio::const_buffer&)> data_read_handler;
+        typedef boost::function<data_action::type(const boost::asio::mutable_buffer&,size_t&)> data_write_handler;
         typedef boost::function<header_action::type(const std::string &line)> header_handler;
         typedef boost::function<void(const info&,CURLcode)> done_handler;
         
@@ -354,6 +355,7 @@ public:
         options opt;
         done_handler on_done;
         data_read_handler on_data_read;
+        data_write_handler on_data_write;
         header_handler on_header;
         
         bool start(const std::string &uri)
@@ -478,6 +480,9 @@ public:
             curl_easy_setopt(handle_, CURLOPT_WRITEFUNCTION, curl_write_function);
             curl_easy_setopt(handle_, CURLOPT_WRITEDATA, this);
             
+            curl_easy_setopt(handle_, CURLOPT_READFUNCTION, curl_read_function);
+            curl_easy_setopt(handle_, CURLOPT_READDATA, this);
+            
             curl_easy_setopt(handle_, CURLOPT_HEADERFUNCTION, curl_header_function);
             curl_easy_setopt(handle_, CURLOPT_HEADERDATA, this);
             
@@ -527,7 +532,6 @@ public:
         
         size_t write_function(char *ptr, size_t size)
         {
-            CURL_ASIO_LOG("transfer::write_function() read %zd byte", size);
             if (impl_ && on_data_read)
             {
                 callback_protector protector(callback_recursions_);
@@ -544,7 +548,7 @@ public:
                         return CURL_WRITEFUNC_PAUSE;
                     case data_action::abort:
                     default:
-                        return 0;
+                        break;
                 }
             }
             
@@ -555,6 +559,38 @@ public:
         {
             CURL_ASIO_LOGSCOPE("transfer::curl_write_function", userdata);
             return from_ptr(userdata)->write_function(ptr, size * nmemb);
+        }
+        
+        size_t read_function(void *ptr, size_t size)
+        {
+            if (impl_ && on_data_write)
+            {
+                callback_protector protector(callback_recursions_);
+                size_t to_write = 0;
+                data_action::type action = on_data_write(boost::asio::mutable_buffer(ptr, size), to_write);
+                
+                if (!running_)
+                    return CURL_READFUNC_ABORT;
+                
+                switch (action)
+                {
+                    case data_action::success:
+                        return to_write;
+                    case data_action::pause:
+                        return CURL_READFUNC_PAUSE;
+                    case data_action::abort:
+                    default:
+                        break;
+                }
+            }
+            
+            return CURL_READFUNC_ABORT;
+        }
+        
+        static inline size_t curl_read_function(void *ptr, size_t size, size_t nmemb, void *userdata)
+        {
+            CURL_ASIO_LOGSCOPE("transfer::curl_read_function", userdata);
+            return from_ptr(userdata)->read_function(ptr, size * nmemb);
         }
         
         size_t header_function(const char *ptr, size_t size)
@@ -573,7 +609,7 @@ public:
                         return size;
                     case header_action::abort:
                     default:
-                        return 0;
+                        break;
                 }
             }
             
@@ -882,10 +918,6 @@ private:
                     else
                         sock->cancel();
                 }
-            }
-            else
-            {
-                CURL_ASIO_LOG("implementation::async_wait_complete(s=%d, action=%d) cancelled", s, action);
             }
         }
         
