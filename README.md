@@ -1,12 +1,13 @@
 curl-asio
 =========
 
-A libcurl c++ wrapper class for use with boost::asio
+A libcurl c++ wrapper class for easy use with boost::asio.
 
 Features
 --------
 
-* **Simplicity** - It is very easy to use.  It even uses boost::shared_ptr so you don't have to worry about memory management.
+* **Simplicity** - It is very easy to use.  It even uses boost::shared_ptr so you don't have to worry about memory management.  Just include curl_asio.hpp and you're good to go!
+* **License** - curl_asio is is licensed under the terms of the BSD license.
 * **c-ares** - It supports libcurl with c-ares enabled.
 
 Example
