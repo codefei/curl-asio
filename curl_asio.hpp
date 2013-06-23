@@ -882,8 +882,7 @@ private:
         {
             CURL_ASIO_LOG("implementation::async_wait(s=%d, action=%d) sock=%p requested_action=%d", s, action, sock.get(), sock->requested_action());
             int requested_action = sock->requested_action();
-            if (requested_action == CURL_POLL_INOUT ||
-                (requested_action != action && requested_action != CURL_POLL_NONE))
+            if (requested_action != action || requested_action == CURL_POLL_INOUT || requested_action == CURL_POLL_NONE)
             {
                 sock->cancel();
                 action = requested_action;
@@ -951,11 +950,8 @@ private:
                 
                 if (it != sockets_.end())
                 {
-                    if (action != CURL_POLL_NONE)
-                    {
-                        it->second->set_requested_action(action);
-                        async_wait(s, action, it->second);
-                    }
+                    it->second->set_requested_action(action);
+                    async_wait(s, action, it->second);
                 }
             }
             
