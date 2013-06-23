@@ -190,7 +190,7 @@ public:
         class info;
         
         typedef boost::function<data_action::type(const boost::asio::const_buffer&)> data_read_handler;
-        typedef boost::function<data_action::type(const boost::asio::mutable_buffer&,size_t&)> data_write_handler;
+        typedef boost::function<data_action::type(boost::asio::mutable_buffer&)> data_write_handler;
         typedef boost::function<header_action::type(const std::string &line)> header_handler;
         typedef boost::function<void(const info&,CURLcode)> done_handler;
         
@@ -566,8 +566,8 @@ public:
             if (impl_ && on_data_write)
             {
                 callback_protector protector(callback_recursions_);
-                size_t to_write = 0;
-                data_action::type action = on_data_write(boost::asio::mutable_buffer(ptr, size), to_write);
+                boost::asio::mutable_buffer buf(ptr, size);
+                data_action::type action = on_data_write(buf);
                 
                 if (!running_)
                     return CURL_READFUNC_ABORT;
@@ -575,7 +575,7 @@ public:
                 switch (action)
                 {
                     case data_action::success:
-                        return to_write;
+                        return size - boost::asio::buffer_size(buf);
                     case data_action::pause:
                         return CURL_READFUNC_PAUSE;
                     case data_action::abort:
