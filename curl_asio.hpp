@@ -174,6 +174,15 @@ public:
         } type;
     };
     
+    struct header_action
+    {
+        typedef enum
+        {
+            success,
+            abort
+        } type;
+    };
+    
     class transfer: public boost::enable_shared_from_this<transfer>,
                     private boost::noncopyable
     {
@@ -181,6 +190,7 @@ public:
         class info;
         
         typedef boost::function<data_action::type(const boost::asio::const_buffer&)> data_read_handler;
+        typedef boost::function<header_action::type(const std::string &line)> header_handler;
         typedef boost::function<void(const info&,CURLcode)> done_handler;
         
         struct options
@@ -344,6 +354,7 @@ public:
         options opt;
         done_handler on_done;
         data_read_handler on_data_read;
+        header_handler on_header;
         
         bool start(const std::string &uri)
         {
@@ -467,6 +478,9 @@ public:
             curl_easy_setopt(handle_, CURLOPT_WRITEFUNCTION, curl_write_function);
             curl_easy_setopt(handle_, CURLOPT_WRITEDATA, this);
             
+            curl_easy_setopt(handle_, CURLOPT_HEADERFUNCTION, curl_header_function);
+            curl_easy_setopt(handle_, CURLOPT_HEADERDATA, this);
+            
             url_ = uri;
             return true;
         }
@@ -529,17 +543,47 @@ public:
                     case data_action::pause:
                         return CURL_WRITEFUNC_PAUSE;
                     case data_action::abort:
+                    default:
                         return 0;
                 }
             }
             
-            return size;
+            return 0;
         }
         
         static inline size_t curl_write_function(char *ptr, size_t size, size_t nmemb, void *userdata)
         {
             CURL_ASIO_LOGSCOPE("transfer::curl_write_function", userdata);
             return from_ptr(userdata)->write_function(ptr, size * nmemb);
+        }
+        
+        size_t header_function(const char *ptr, size_t size)
+        {
+            if (impl_ && on_header)
+            {
+                callback_protector protector(callback_recursions_);
+                header_action::type action = on_header(std::string(ptr, size));
+                
+                if (!running_)
+                    return 0;
+                
+                switch (action)
+                {
+                    case header_action::success:
+                        return size;
+                    case header_action::abort:
+                    default:
+                        return 0;
+                }
+            }
+            
+            return 0;
+        }
+        
+        static inline size_t curl_header_function(void *ptr, size_t size, size_t nmemb, void *userdata)
+        {
+            CURL_ASIO_LOGSCOPE("transfer::curl_header_function", userdata);
+            return from_ptr(userdata)->header_function(static_cast<const char*>(ptr), size * nmemb);
         }
     };
     
