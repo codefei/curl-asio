@@ -728,19 +728,10 @@ private:
                 udp_->async_send(boost::asio::null_buffers(), handler);
         }
         
-        bool available() const
-        {
-            if (tcp_)
-                return tcp_->available() > 0;
-            else if (udp_)
-                return udp_->available() > 0;
-            return false;
-        }
-        
         int requested_action() const { return requested_action_; }
+        
         void set_requested_action(int action)
         {
-            CURL_ASIO_LOG("socketinfo::set_requested_action(action=%d) this=%p", action, this);
             requested_action_ = action;
             cancel();
         }
