@@ -32,6 +32,7 @@
 
 #include <map>
 #include <set>
+#include <list>
 #include <cassert>
 
 #include <boost/asio.hpp>
@@ -157,7 +158,10 @@ public:
     
     boost::shared_ptr<transfer> create_transfer() const
     {
-        return boost::shared_ptr<transfer>(new transfer(impl_));
+        boost::shared_ptr<transfer> trans(new transfer(impl_));
+        if (trans->init())
+            return trans;
+        return boost::shared_ptr<transfer>();
     }
     
     struct data_action
@@ -177,17 +181,55 @@ public:
                     private boost::noncopyable
     {
     public:
+        struct options
+        {
+            long protocols;
+            long max_redirs;
+            long redir_protocols;
+            bool fail_on_error;
+            bool follow_location;
+            bool auto_referer;
+            bool http_proxy_tunnel;
+            std::string proxy;
+            std::string no_proxy;
+            std::string proxy_username;
+            std::string proxy_password;
+            long proxy_port;
+            long proxy_type;
+            bool accept_all_supported_encodings;
+            std::string accept_encoding;
+            std::list<std::string> http_header;
+            
+            options()
+                : protocols(CURLPROTO_ALL),
+                  max_redirs(-1),
+                  redir_protocols(CURLPROTO_ALL & ~(CURLPROTO_FILE|CURLPROTO_SCP)),
+                  fail_on_error(false),
+                  follow_location(false),
+                  auto_referer(false),
+                  http_proxy_tunnel(false),
+                  proxy_port(1080),
+                  proxy_type(CURLPROXY_HTTP),
+                  accept_all_supported_encodings(true)
+            {
+            }
+        };
+        
         virtual ~transfer()
         {
             CURL_ASIO_LOGSCOPE("transfer::~transfer", this);
             if (handle_)
                 curl_easy_cleanup(handle_);
+            if (httpheader_)
+                curl_slist_free_all(httpheader_);
         }
         
+        const std::string& url;
+        options opt;
         done_handler on_done;
         data_read_handler on_data_read;
         
-        bool start(const std::string &url)
+        bool start(const std::string &uri)
         {
             if (running_ || !impl_ || callback_recursions_ > 0)
                 return false;
@@ -195,9 +237,8 @@ public:
             if (!init())
                 return false;
             
-            url_ = url;
-            
-            curl_easy_setopt(handle_, CURLOPT_URL, url_.c_str());
+            if (!setup(uri))
+                return false;
             
             if (impl_->add_transfer(shared_from_this()))
             {
@@ -238,6 +279,7 @@ public:
         boost::shared_ptr<implementation> impl_;
         unsigned int callback_recursions_;
         CURL* handle_;
+        curl_slist *httpheader_;
         bool running_;
         std::string url_;
         boost::shared_ptr<transfer> lock_;
@@ -257,12 +299,60 @@ public:
         }
         
         transfer(boost::shared_ptr<implementation> impl)
-            : impl_(impl),
+            : url(url_),
+              impl_(impl),
               callback_recursions_(0),
               handle_(NULL),
+              httpheader_(NULL),
               running_(false)
         {
             CURL_ASIO_LOGSCOPE("transfer::transfer", this);
+        }
+        
+        bool setup(const std::string &uri)
+        {
+            curl_easy_setopt(handle_, CURLOPT_URL, uri.c_str());
+            
+            curl_easy_setopt(handle_, CURLOPT_PROTOCOLS, opt.protocols);
+            curl_easy_setopt(handle_, CURLOPT_MAXREDIRS, opt.max_redirs);
+            curl_easy_setopt(handle_, CURLOPT_REDIR_PROTOCOLS, opt.redir_protocols);
+            curl_easy_setopt(handle_, CURLOPT_FAILONERROR, opt.fail_on_error ? 1l : 0l);
+            curl_easy_setopt(handle_, CURLOPT_FOLLOWLOCATION, opt.follow_location ? 1l : 0l);
+            curl_easy_setopt(handle_, CURLOPT_AUTOREFERER, opt.auto_referer ? 1l : 0l);
+            if (!opt.proxy.empty())
+                curl_easy_setopt(handle_, CURLOPT_PROXY, opt.proxy.c_str());
+            if (!opt.no_proxy.empty())
+                curl_easy_setopt(handle_, CURLOPT_NOPROXY, opt.no_proxy.c_str());
+            if (!opt.proxy_username.empty() || !opt.proxy_password.empty())
+            {
+                curl_easy_setopt(handle_, CURLOPT_PROXYUSERNAME, opt.proxy_username.c_str());
+                curl_easy_setopt(handle_, CURLOPT_PROXYPASSWORD, opt.proxy_password.c_str());
+            }
+            curl_easy_setopt(handle_, CURLOPT_PROXYPORT, opt.proxy_port);
+            curl_easy_setopt(handle_, CURLOPT_PROXYTYPE, opt.proxy_type);
+            if (opt.accept_all_supported_encodings)
+                curl_easy_setopt(handle_, CURLOPT_ACCEPT_ENCODING, "");
+            else
+                curl_easy_setopt(handle_, CURLOPT_ACCEPT_ENCODING, opt.accept_encoding.empty() ? NULL : opt.accept_encoding.c_str());
+            
+            if (!opt.http_header.empty())
+            {
+                for (std::list<std::string>::const_iterator it(opt.http_header.begin()); it != opt.http_header.end(); ++it)
+                {
+                    curl_slist *new_list = curl_slist_append(httpheader_, it->c_str());
+                    if (!new_list)
+                        return false;
+                    httpheader_ = new_list;
+                }
+                
+                curl_easy_setopt(handle_, CURLOPT_HTTPHEADER, httpheader_);
+            }
+            
+            curl_easy_setopt(handle_, CURLOPT_WRITEFUNCTION, curl_write_function);
+            curl_easy_setopt(handle_, CURLOPT_WRITEDATA, this);
+            
+            url_ = uri;
+            return true;
         }
         
         bool init()
@@ -278,13 +368,14 @@ public:
                     return false;
             }
             
+            if (httpheader_)
+            {
+                curl_slist_free_all(httpheader_);
+                httpheader_ = NULL;
+            }
+            
             curl_easy_setopt(handle_, CURLOPT_PRIVATE, this);
-            
             curl_easy_setopt(handle_, CURLOPT_NOSIGNAL, 1l);
-            
-            curl_easy_setopt(handle_, CURLOPT_WRITEFUNCTION, curl_write_function);
-            curl_easy_setopt(handle_, CURLOPT_WRITEDATA, this);
-            
             return true;
         }
         
