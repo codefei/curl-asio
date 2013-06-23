@@ -212,6 +212,7 @@ public:
             bool accept_all_supported_encodings;
             std::string accept_encoding;
             std::list<std::string> http_header;
+            std::string interface;
             
             options()
                 : protocols(CURLPROTO_ALL),
@@ -448,6 +449,7 @@ public:
             curl_easy_setopt(handle_, CURLOPT_FAILONERROR, opt.fail_on_error ? 1l : 0l);
             curl_easy_setopt(handle_, CURLOPT_FOLLOWLOCATION, opt.follow_location ? 1l : 0l);
             curl_easy_setopt(handle_, CURLOPT_AUTOREFERER, opt.auto_referer ? 1l : 0l);
+            curl_easy_setopt(handle_, CURLOPT_HTTPPROXYTUNNEL, opt.http_proxy_tunnel ? 1l : 0l);
             if (!opt.proxy.empty())
                 curl_easy_setopt(handle_, CURLOPT_PROXY, opt.proxy.c_str());
             if (!opt.no_proxy.empty())
@@ -476,6 +478,9 @@ public:
                 
                 curl_easy_setopt(handle_, CURLOPT_HTTPHEADER, httpheader_);
             }
+            
+            if (!opt.interface.empty())
+                curl_easy_setopt(handle_, CURLOPT_INTERFACE, ("if!" + opt.interface).c_str());
             
             curl_easy_setopt(handle_, CURLOPT_WRITEFUNCTION, curl_write_function);
             curl_easy_setopt(handle_, CURLOPT_WRITEDATA, this);
