@@ -211,6 +211,8 @@ public:
             long proxy_type;
             bool accept_all_supported_encodings;
             std::string accept_encoding;
+            std::string referer;
+            std::string useragent;
             std::list<std::string> http_header;
             std::string interface;
             
@@ -465,7 +467,10 @@ public:
                 curl_easy_setopt(handle_, CURLOPT_ACCEPT_ENCODING, "");
             else
                 curl_easy_setopt(handle_, CURLOPT_ACCEPT_ENCODING, opt.accept_encoding.empty() ? NULL : opt.accept_encoding.c_str());
-            
+            if (!opt.referer.empty())
+                curl_easy_setopt(handle_, CURLOPT_REFERER, opt.referer.c_str());
+            if (!opt.useragent.empty())
+                curl_easy_setopt(handle_, CURLOPT_USERAGENT, opt.useragent.c_str());
             if (!opt.http_header.empty())
             {
                 for (std::list<std::string>::const_iterator it(opt.http_header.begin()); it != opt.http_header.end(); ++it)
@@ -600,22 +605,27 @@ public:
         
         size_t header_function(const char *ptr, size_t size)
         {
-            if (impl_ && on_header)
+            if (impl_)
             {
-                callback_protector protector(callback_recursions_);
-                header_action::type action = on_header(std::string(ptr, size));
-                
-                if (!running_)
-                    return 0;
-                
-                switch (action)
+                if (on_header)
                 {
-                    case header_action::success:
-                        return size;
-                    case header_action::abort:
-                    default:
-                        break;
+                    callback_protector protector(callback_recursions_);
+                    header_action::type action = on_header(std::string(ptr, size));
+                    
+                    if (!running_)
+                        return 0;
+                    
+                    switch (action)
+                    {
+                        case header_action::success:
+                            return size;
+                        case header_action::abort:
+                        default:
+                            break;
+                    }
                 }
+                else
+                    return size;
             }
             
             return 0;
@@ -748,8 +758,6 @@ private:
             lock_.reset();
         }
         
-        bool removed() const { return !lock_; }
-        
     private:
         boost::shared_ptr<boost::asio::ip::tcp::socket> tcp_;
         boost::shared_ptr<boost::asio::ip::udp::socket> udp_;
@@ -783,7 +791,7 @@ private:
             timer_.cancel();
             
             for (socketinfo_map_t::const_iterator it(sockets_.begin()); it != sockets_.end(); ++it)
-                it->second->cancel();
+                it->second->remove();
             sockets_.clear();
             
             for (transfer_set_t::const_iterator it(transfers_.begin()); it != transfers_.end(); ++it)
@@ -926,8 +934,7 @@ private:
                 if (sock)
                 {
                     sock->remove();
-                    CURLMcode rc = curl_multi_assign(curl_, s, NULL);
-                    assert(rc <= CURLM_OK);
+                    curl_multi_assign(curl_, s, NULL);
                 }
                 
                 if (it != sockets_.end())
@@ -943,8 +950,7 @@ private:
                 
                 if (it == sockets_.end() && sock)
                 {
-                    CURLMcode rc = curl_multi_assign(curl_, s, sock->add());
-                    assert(rc <= CURLM_OK);
+                    curl_multi_assign(curl_, s, sock->add());
                     it = sockets_.insert(std::make_pair(s, sock)).first;
                 }
                 
