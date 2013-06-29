@@ -53,6 +53,12 @@
 #define CURL_ASIO_LOG(fmt,...)
 #endif
 
+#if defined(BOOST_MSVC) && (BOOST_MSVC >= 1400) \
+  && (!defined(_WIN32_WINNT) || _WIN32_WINNT < 0x0600) \
+  && !defined(BOOST_ASIO_ENABLE_CANCELIO)
+#define __CURL_ASIO_CANCEL_WORKAROUND
+#endif
+
 class curl_asio
 {
     class implementation;
@@ -658,7 +664,7 @@ private:
             socklen_t len;
             
             len = sizeof(type);
-            if (::getsockopt(s, SOL_SOCKET, SO_TYPE, &type, &len) < 0)
+            if (::getsockopt(s, SOL_SOCKET, SO_TYPE, reinterpret_cast<char*>(&type), &len) < 0)
                 return boost::shared_ptr<socketinfo>();
             
             len = sizeof(sa);
@@ -667,76 +673,32 @@ private:
             
             if (type == SOCK_STREAM)
             {
-                boost::shared_ptr<boost::asio::ip::tcp::socket> sock(new boost::asio::ip::tcp::socket(io));
                 if (sa.sa_family == AF_INET)
-                    sock->assign(boost::asio::ip::tcp::v4(), ::dup(s));
+                    return boost::shared_ptr<socketinfo>(new tcpsocketinfo(io, boost::asio::ip::tcp::v4(), s));
                 else if (sa.sa_family == AF_INET6)
-                    sock->assign(boost::asio::ip::tcp::v6(), ::dup(s));
-                else
-                    return boost::shared_ptr<socketinfo>();
-                
-                return boost::shared_ptr<socketinfo>(new socketinfo(sock));
+                    return boost::shared_ptr<socketinfo>(new tcpsocketinfo(io, boost::asio::ip::tcp::v6(), s));
             }
             else if (type == SOCK_DGRAM)
             {
-                boost::shared_ptr<boost::asio::ip::udp::socket> sock(new boost::asio::ip::udp::socket(io));
                 if (sa.sa_family == AF_INET)
-                    sock->assign(boost::asio::ip::udp::v4(), ::dup(s));
+                    return boost::shared_ptr<socketinfo>(new udpsocketinfo(io, boost::asio::ip::udp::v4(), s));
                 else if (sa.sa_family == AF_INET6)
-                    sock->assign(boost::asio::ip::udp::v6(), ::dup(s));
-                else
-                    return boost::shared_ptr<socketinfo>();
-                
-                return boost::shared_ptr<socketinfo>(new socketinfo(sock));
+                    return boost::shared_ptr<socketinfo>(new udpsocketinfo(io, boost::asio::ip::udp::v6(), s));
             }
             
             return boost::shared_ptr<socketinfo>();
         }
         
-        socketinfo(boost::shared_ptr<boost::asio::ip::tcp::socket> tcp)
-            : tcp_(tcp),
-              requested_action_(CURL_POLL_NONE)
+        socketinfo()
+            : requested_action_(CURL_POLL_NONE)
         {
-            CURL_ASIO_LOGSCOPE("socketinfo::socketinfo<tcp>", this);
         }
         
-        socketinfo(boost::shared_ptr<boost::asio::ip::udp::socket> udp)
-            : udp_(udp),
-              requested_action_(CURL_POLL_NONE)
-        {
-            CURL_ASIO_LOGSCOPE("socketinfo::socketinfo<udp>", this);
-        }
+        typedef boost::function<void(const boost::system::error_code&,std::size_t)> WaitHandler;
         
-        virtual ~socketinfo()
-        {
-            CURL_ASIO_LOGSCOPE("socketinfo::~socketinfo", this);
-        }
-        
-        void cancel()
-        {
-            if (tcp_)
-                tcp_->cancel();
-            else if (udp_)
-                udp_->cancel();
-        }
-        
-        template<typename WaitHandler>
-        void async_wait_read(WaitHandler handler)
-        {
-            if (tcp_)
-                tcp_->async_read_some(boost::asio::null_buffers(), handler);
-            else if (udp_)
-                udp_->async_receive(boost::asio::null_buffers(), handler);
-        }
-        
-        template<typename WaitHandler>
-        void async_wait_write(WaitHandler handler)
-        {
-            if (tcp_)
-                tcp_->async_write_some(boost::asio::null_buffers(), handler);
-            else if (udp_)
-                udp_->async_send(boost::asio::null_buffers(), handler);
-        }
+        virtual void cancel() = 0;
+        virtual void async_wait_read(WaitHandler handler) = 0;
+        virtual void async_wait_write(WaitHandler handler) = 0;
         
         int requested_action() const { return requested_action_; }
         
@@ -758,11 +720,104 @@ private:
             lock_.reset();
         }
         
-    private:
-        boost::shared_ptr<boost::asio::ip::tcp::socket> tcp_;
-        boost::shared_ptr<boost::asio::ip::udp::socket> udp_;
+    protected:
         int requested_action_;
         boost::shared_ptr<socketinfo> lock_;
+        
+        static inline curl_socket_t dup_handle(curl_socket_t s)
+        {
+#if defined(_WIN32) || defined(_WIN64)
+            WSAPROTOCOL_INFO info;
+            return ::WSADuplicateSocket(s, ::GetCurrentProcessId(), &info);
+#else
+            return ::dup(s);
+#endif
+        }
+    };
+    
+    class tcpsocketinfo: public socketinfo
+    {
+    public:
+        tcpsocketinfo(boost::asio::io_service &io, const boost::asio::ip::tcp &version, curl_socket_t s)
+            : socketinfo(),
+              sock_(new boost::asio::ip::tcp::socket(io))
+#ifdef __CURL_ASIO_CANCEL_WORKAROUND
+              , version_(version)
+#endif
+        {
+            sock_->assign(version, dup_handle(s));
+        }
+        
+        virtual void cancel()
+        {
+            CURL_ASIO_LOGSCOPE("tcpsocketinfo::cancel", this);
+#ifdef __CURL_ASIO_CANCEL_WORKAROUND
+            boost::shared_ptr<boost::asio::ip::tcp::socket> old(sock_);
+            sock_.reset(new boost::asio::ip::tcp::socket(sock_->get_io_service()));
+            sock_->assign(version_, dup_handle(old->native_handle()));
+            old->close();
+#else
+            sock_->cancel();
+#endif
+        }
+        
+        virtual void async_wait_read(WaitHandler handler)
+        {
+            sock_->async_read_some(boost::asio::null_buffers(), handler);
+        }
+        
+        virtual void async_wait_write(WaitHandler handler)
+        {
+            sock_->async_write_some(boost::asio::null_buffers(), handler);
+        }
+        
+    private:
+        boost::shared_ptr<boost::asio::ip::tcp::socket> sock_;
+#ifdef __CURL_ASIO_CANCEL_WORKAROUND
+        const boost::asio::ip::tcp version_;
+#endif
+    };
+    
+    class udpsocketinfo: public socketinfo
+    {
+    public:
+        udpsocketinfo(boost::asio::io_service &io, const boost::asio::ip::udp &version, curl_socket_t s)
+            : socketinfo(),
+              sock_(new boost::asio::ip::udp::socket(io))
+#ifdef __CURL_ASIO_CANCEL_WORKAROUND
+              , version_(version)
+#endif
+        {
+            sock_->assign(version, dup_handle(s));
+        }
+        
+        virtual void cancel()
+        {
+#ifdef __CURL_ASIO_CANCEL_WORKAROUND
+            boost::shared_ptr<boost::asio::ip::udp::socket> old(sock_);
+            sock_.reset(new boost::asio::ip::udp::socket(sock_->get_io_service()));
+            sock_->assign(version_, dup_handle(old->native_handle()));
+            old->close();
+#else
+            sock_->cancel();
+#endif
+        }
+        
+        virtual void async_wait_read(WaitHandler handler)
+        {
+            sock_->async_receive(boost::asio::null_buffers(), handler);
+        }
+        
+        virtual void async_wait_write(WaitHandler handler)
+        {
+            sock_->async_send(boost::asio::null_buffers(), handler);
+        }
+        
+    private:
+        boost::shared_ptr<boost::asio::ip::udp::socket> sock_;
+#ifdef __CURL_ASIO_CANCEL_WORKAROUND
+        const boost::asio::ip::udp version_;
+#endif
     };
     
     class implementation: public boost::enable_shared_from_this<implementation>,
@@ -1007,6 +1062,8 @@ private:
         }
     };
 };
+
+#undef __CURL_ASIO_CANCEL_WORKAROUND
 
 #endif
 
