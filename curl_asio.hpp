@@ -753,7 +753,7 @@ private:
             CURL_ASIO_LOGSCOPE("tcpsocketinfo::cancel", this);
 #ifdef __CURL_ASIO_CANCEL_WORKAROUND
             boost::shared_ptr<boost::asio::ip::tcp::socket> old(sock_);
-            sock_.reset(new boost::asio::ip::tcp::socket(sock_->get_io_service()));
+            sock_.reset(new boost::asio::ip::tcp::socket(old->get_io_service()));
             sock_->assign(version_, dup_handle(old->native_handle()));
             old->close();
 #else
@@ -795,7 +795,7 @@ private:
         {
 #ifdef __CURL_ASIO_CANCEL_WORKAROUND
             boost::shared_ptr<boost::asio::ip::udp::socket> old(sock_);
-            sock_.reset(new boost::asio::ip::udp::socket(sock_->get_io_service()));
+            sock_.reset(new boost::asio::ip::udp::socket(old->get_io_service()));
             sock_->assign(version_, dup_handle(old->native_handle()));
             old->close();
 #else
