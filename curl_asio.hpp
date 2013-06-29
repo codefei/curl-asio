@@ -193,12 +193,12 @@ public:
                     private boost::noncopyable
     {
     public:
-        class info;
+        typedef boost::shared_ptr<transfer> ptr;
         
         typedef boost::function<data_action::type(const boost::asio::const_buffer&)> data_read_handler;
         typedef boost::function<data_action::type(boost::asio::mutable_buffer&)> data_write_handler;
         typedef boost::function<header_action::type(const std::string &line)> header_handler;
-        typedef boost::function<void(const info&,CURLcode)> done_handler;
+        typedef boost::function<void(CURLcode)> done_handler;
         
         struct options
         {
@@ -237,7 +237,7 @@ public:
             }
         };
         
-        class info: public boost::noncopyable
+        class transferinfo: public boost::noncopyable
         {
         public:
             class timeinfo
@@ -252,9 +252,9 @@ public:
                 double redirect;
                 
             private:
-                friend class info;
+                friend class transferinfo;
                 
-                timeinfo(const info &i)
+                timeinfo(const transferinfo &i)
                 {
                     if (!i.get_info(CURLINFO_TOTAL_TIME, total))
                         total = 0.0;
@@ -317,7 +317,7 @@ public:
             friend class transfer;
             friend class timeinfo;
             
-            info(CURL*& handle)
+            transferinfo(CURL*& handle)
                 : handle_(handle)
             {
             }
@@ -407,6 +407,8 @@ public:
             return false;
         }
         
+        const transferinfo& info() const { return info_; }
+        
         bool running() const { return running_; }
         
     private:
@@ -418,6 +420,7 @@ public:
         unsigned int callback_recursions_;
         CURL* handle_;
         curl_slist *httpheader_;
+        transferinfo info_;
         bool running_;
         std::string url_;
         boost::shared_ptr<transfer> lock_;
@@ -442,6 +445,7 @@ public:
               callback_recursions_(0),
               handle_(NULL),
               httpheader_(NULL),
+              info_(handle_),
               running_(false)
         {
             CURL_ASIO_LOGSCOPE("transfer::transfer", this);
@@ -542,7 +546,7 @@ public:
         {
             CURL_ASIO_LOG("transfer::handle_done: result=%d", result);
             if (on_done)
-                on_done(info(handle_), result);
+                on_done(result);
             running_ = false;
         }
         

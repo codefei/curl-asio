@@ -24,18 +24,18 @@ static curl_asio::data_action::type on_transfer_data_read(std::ofstream &out, co
     return curl_asio::data_action::success;
 }
 
-static void on_transfer_done(std::ofstream &out, const std::string &file, const curl_asio::transfer::info &info, CURLcode result)
+static void on_transfer_done(curl_asio::transfer::ptr transfer, std::ofstream &out, const std::string &file, CURLcode result)
 {
     if (result == CURLE_OK)
     {
         out.close();
         
-        std::cout << "Transfer of " << info.effective_url() << " completed successfully (" << info.times().total << " seconds)! Content saved to file " << file << std::endl;
+        std::cout << "Transfer of " << transfer->info().effective_url() << " completed successfully (" << transfer->info().times().total << " seconds)! Content saved to file " << file << std::endl;
         exit(0);
     }
     else
     {
-        std::cerr << "Transfer of " << info.effective_url() << " failed with error " << result << std::endl;
+        std::cerr << "Transfer of " << transfer->info().effective_url() << " failed with error " << result << std::endl;
         exit(1);
     }
 }
@@ -50,7 +50,7 @@ int main(int argc, char *argv[])
     
     boost::asio::io_service io;
     curl_asio curl(io);
-    boost::shared_ptr<curl_asio::transfer> transfer = curl.create_transfer();
+    curl_asio::transfer::ptr transfer = curl.create_transfer();
     if (transfer)
     {
         std::ofstream out(argv[2]);
@@ -59,7 +59,7 @@ int main(int argc, char *argv[])
         transfer->opt.redir_protocols = CURLPROTO_HTTP | CURLPROTO_HTTPS;
         transfer->opt.follow_location = true;
         transfer->on_data_read = boost::bind(on_transfer_data_read, boost::ref(out), _1);
-        transfer->on_done = boost::bind(on_transfer_done, boost::ref(out), argv[2], _1, _2);
+        transfer->on_done = boost::bind(on_transfer_done, transfer, boost::ref(out), argv[2], _1);
         if (transfer->start(argv[1]))
         {
             while (1)
