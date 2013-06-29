@@ -263,57 +263,50 @@ public:
             
             double total_time() const
             {
-                double ret;
-                if (!get_info(CURLINFO_TOTAL_TIME, ret))
-                    ret = 0.0;
+                double ret = 0.0;
+                get_info(CURLINFO_TOTAL_TIME, ret);
                 return ret;
             }
             
             double namelookup_time() const
             {
-                double ret;
-                if (!get_info(CURLINFO_NAMELOOKUP_TIME, ret))
-                    ret = 0.0;
+                double ret = 0.0;
+                get_info(CURLINFO_NAMELOOKUP_TIME, ret);
                 return ret;
             }
             
             double connect_time() const
             {
-                double ret;
-                if (!get_info(CURLINFO_CONNECT_TIME, ret))
-                    ret = 0.0;
+                double ret = 0.0;
+                get_info(CURLINFO_CONNECT_TIME, ret);
                 return ret;
             }
             
             double appconnect_time() const
             {
-                double ret;
-                if (!get_info(CURLINFO_APPCONNECT_TIME, ret))
-                    ret = 0.0;
+                double ret = 0.0;
+                get_info(CURLINFO_APPCONNECT_TIME, ret);
                 return ret;
             }
             
             double pretransfer_time() const
             {
-                double ret;
-                if (!get_info(CURLINFO_PRETRANSFER_TIME, ret))
-                    ret = 0.0;
+                double ret = 0.0;
+                get_info(CURLINFO_PRETRANSFER_TIME, ret);
                 return ret;
             }
             
             double starttransfer_time() const
             {
-                double ret;
-                if (!get_info(CURLINFO_STARTTRANSFER_TIME, ret))
-                    ret = 0.0;
+                double ret = 0.0;
+                get_info(CURLINFO_STARTTRANSFER_TIME, ret);
                 return ret;
             }
             
             double redirect_time() const
             {
-                double ret;
-                if (!get_info(CURLINFO_REDIRECT_TIME, ret))
-                    ret = 0.0;
+                double ret = 0.0;
+                get_info(CURLINFO_REDIRECT_TIME, ret);
                 return ret;
             }
             
