@@ -240,39 +240,6 @@ public:
         class transferinfo: public boost::noncopyable
         {
         public:
-            class timeinfo
-            {
-            public:
-                double total;
-                double namelookup;
-                double connect;
-                double appconnect;
-                double pretransfer;
-                double starttransfer;
-                double redirect;
-                
-            private:
-                friend class transferinfo;
-                
-                timeinfo(const transferinfo &i)
-                {
-                    if (!i.get_info(CURLINFO_TOTAL_TIME, total))
-                        total = 0.0;
-                    if (!i.get_info(CURLINFO_NAMELOOKUP_TIME, namelookup))
-                        namelookup = 0.0;
-                    if (!i.get_info(CURLINFO_CONNECT_TIME, connect))
-                        connect = 0.0;
-                    if (!i.get_info(CURLINFO_APPCONNECT_TIME, appconnect))
-                        appconnect = 0.0;
-                    if (!i.get_info(CURLINFO_PRETRANSFER_TIME, pretransfer))
-                        pretransfer = 0.0;
-                    if (!i.get_info(CURLINFO_STARTTRANSFER_TIME, starttransfer))
-                        starttransfer = 0.0;
-                    if (!i.get_info(CURLINFO_REDIRECT_TIME, redirect))
-                        redirect = 0.0;
-                }
-            };
-            
             std::string effective_url() const
             {
                 std::string ret;
@@ -294,9 +261,60 @@ public:
                 return ret;
             }
             
-            const timeinfo times() const
+            double total_time() const
             {
-                return timeinfo(*this);
+                double ret;
+                if (!get_info(CURLINFO_TOTAL_TIME, ret))
+                    ret = 0.0;
+                return ret;
+            }
+            
+            double namelookup_time() const
+            {
+                double ret;
+                if (!get_info(CURLINFO_NAMELOOKUP_TIME, ret))
+                    ret = 0.0;
+                return ret;
+            }
+            
+            double connect_time() const
+            {
+                double ret;
+                if (!get_info(CURLINFO_CONNECT_TIME, ret))
+                    ret = 0.0;
+                return ret;
+            }
+            
+            double appconnect_time() const
+            {
+                double ret;
+                if (!get_info(CURLINFO_APPCONNECT_TIME, ret))
+                    ret = 0.0;
+                return ret;
+            }
+            
+            double pretransfer_time() const
+            {
+                double ret;
+                if (!get_info(CURLINFO_PRETRANSFER_TIME, ret))
+                    ret = 0.0;
+                return ret;
+            }
+            
+            double starttransfer_time() const
+            {
+                double ret;
+                if (!get_info(CURLINFO_STARTTRANSFER_TIME, ret))
+                    ret = 0.0;
+                return ret;
+            }
+            
+            double redirect_time() const
+            {
+                double ret;
+                if (!get_info(CURLINFO_REDIRECT_TIME, ret))
+                    ret = 0.0;
+                return ret;
             }
             
             long redirect_count() const
@@ -315,7 +333,6 @@ public:
             
         private:
             friend class transfer;
-            friend class timeinfo;
             
             transferinfo(CURL*& handle)
                 : handle_(handle)
