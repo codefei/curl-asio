@@ -45,12 +45,13 @@
 #include <curl/curl.h>
 
 #ifdef CURL_ASIO_DEBUG
-#include <cstdarg>
+#include <iostream>
 #define CURL_ASIO_LOGSCOPE(func,ptr) log_scope __log(func,ptr)
-#define CURL_ASIO_LOG(fmt,...) log::print(__FILE__, __LINE__, log::format(fmt,##__VA_ARGS__))
+#define CURL_ASIO_LOG(s) \
+    std::cout << __FILE__ ":" << __LINE__ << std::string(log::indent_, '\t') << s << std::endl;
 #else
 #define CURL_ASIO_LOGSCOPE(func,ptr)
-#define CURL_ASIO_LOG(fmt,...)
+#define CURL_ASIO_LOG(s)
 #endif
 
 #if defined(BOOST_MSVC) && (BOOST_MSVC >= 1400) \
@@ -68,43 +69,6 @@ class curl_asio
     class log
     { 
     public:
-        static inline void print(const char *file, int lineno, const std::string &line)
-        {
-            printf("%s%s:%d: %s\n", indent().c_str(), file, lineno, line.c_str());
-        }
-        
-        static inline void print(const std::string &line)
-        {
-            printf("%s%s\n", indent().c_str(), line.c_str());
-        }
-        
-        static inline std::string format(const char *fmt, ...) __attribute__((format(printf, 1, 2)))
-        {
-            std::vector<char> buf;
-            while (1)
-            {
-                va_list ap;
-                va_start(ap, fmt);
-                int n = vsnprintf(&buf[0], buf.capacity(), fmt, ap);
-                va_end(ap);
-                if (n < 0)
-                    return std::string();
-                
-                if ((std::vector<char>::size_type)n >= buf.capacity())
-                    buf.reserve(n + 1);
-                else
-                    return std::string(&buf[0], buf.capacity() - 1);
-            }
-            
-            return std::string();
-        }
-        
-        static inline std::string indent()
-        {
-            return std::string(indent_, '\t');
-        }
-        
-    protected:
         static unsigned int indent_;
     };
 
@@ -115,14 +79,14 @@ class curl_asio
             : func_(func),
               ptr_(ptr)
         {
-            print(format("---> %s() @ %p", func_.c_str(), ptr_));
+            CURL_ASIO_LOG("---> " << func_ << "() @ " << ptr_);
             ++indent_;
         }
         
         ~log_scope()
         {
             --indent_;
-            print(format("<--- %s() @ %p", func_.c_str(), ptr_));
+            CURL_ASIO_LOG("<--- " << func_ << "() @ " << ptr_);
         }
         
     private:
@@ -554,7 +518,7 @@ public:
         
         void handle_done(CURLcode result)
         {
-            CURL_ASIO_LOG("transfer::handle_done: result=%d", result);
+            CURL_ASIO_LOG("transfer::handle_done: result=" << result);
             if (on_done)
                 on_done(result);
             running_ = false;
@@ -980,7 +944,7 @@ private:
         
         void async_wait(curl_socket_t s, int action, boost::shared_ptr<socketinfo> sock)
         {
-            CURL_ASIO_LOG("implementation::async_wait(s=%d, action=%d) sock=%p requested_action=%d", s, action, sock.get(), sock->requested_action());
+            CURL_ASIO_LOG("implementation::async_wait(s=" << s << ", action=" << action << ") sock=" << sock.get() << " requested_action=" << sock->requested_action());
             int requested_action = sock->requested_action();
             if (requested_action != action || requested_action == CURL_POLL_INOUT || requested_action == CURL_POLL_NONE)
             {
@@ -1002,7 +966,7 @@ private:
             {
                 callback_protector protector(callback_recursions_);
                 
-                CURL_ASIO_LOG("implementation::async_wait_complete(s=%d, action=%d)", s, action);
+                CURL_ASIO_LOG("implementation::async_wait_complete(s=" << s << ", action=" << action << ")");
                 CURLMcode rc = ::curl_multi_socket_action(curl_, s, action, &running_);
                 if (rc <= CURLM_OK)
                 {
@@ -1059,7 +1023,7 @@ private:
         static inline int curl_socket_function(CURL *, curl_socket_t s, int action, void *userp, void *socketp)
         {
             CURL_ASIO_LOGSCOPE("curl_socket_function", userp);
-            CURL_ASIO_LOG("socket=%d, action=%d socketinfo=%p", s, action, socketp);
+            CURL_ASIO_LOG("socket=" << s << ", action=" << action << " socketinfo=" << socketp);
             return from_ptr(userp)->socket_function(s, action, socketinfo::from_ptr(socketp));
         }
         
