@@ -335,7 +335,7 @@ public:
             bool get_info(CURLINFO option, std::string &val) const
             {
                 const char *str = NULL;
-                CURLcode rc = curl_easy_getinfo(handle_, option, &str);
+                CURLcode rc = ::curl_easy_getinfo(handle_, option, &str);
                 if (rc == CURLE_OK)
                 {
                     if (str)
@@ -350,12 +350,12 @@ public:
             
             bool get_info(CURLINFO option, long &val) const
             {
-                return curl_easy_getinfo(handle_, option, &val) == CURLE_OK;
+                return ::curl_easy_getinfo(handle_, option, &val) == CURLE_OK;
             }
             
             bool get_info(CURLINFO option, double &val) const
             {
-                return curl_easy_getinfo(handle_, option, &val) == CURLE_OK;
+                return ::curl_easy_getinfo(handle_, option, &val) == CURLE_OK;
             }
             
             CURL*& handle_;
@@ -365,9 +365,9 @@ public:
         {
             CURL_ASIO_LOGSCOPE("transfer::~transfer", this);
             if (handle_)
-                curl_easy_cleanup(handle_);
+                ::curl_easy_cleanup(handle_);
             if (httpheader_)
-                curl_slist_free_all(httpheader_);
+                ::curl_slist_free_all(httpheader_);
         }
         
         const std::string& url;
@@ -438,7 +438,7 @@ public:
         static inline boost::shared_ptr<transfer> from_easy(CURL *easy)
         {
             void *trans;
-            CURLcode rc = curl_easy_getinfo(easy, CURLINFO_PRIVATE, &trans);
+            CURLcode rc = ::curl_easy_getinfo(easy, CURLINFO_PRIVATE, &trans);
             if (rc == CURLE_OK && trans)
                 return static_cast<transfer*>(trans)->shared_from_this();
             return boost::shared_ptr<transfer>();
@@ -463,58 +463,58 @@ public:
         
         bool setup(const std::string &uri)
         {
-            curl_easy_setopt(handle_, CURLOPT_URL, uri.c_str());
+            ::curl_easy_setopt(handle_, CURLOPT_URL, uri.c_str());
             
-            curl_easy_setopt(handle_, CURLOPT_PROTOCOLS, opt.protocols);
-            curl_easy_setopt(handle_, CURLOPT_MAXREDIRS, opt.max_redirs);
-            curl_easy_setopt(handle_, CURLOPT_REDIR_PROTOCOLS, opt.redir_protocols);
-            curl_easy_setopt(handle_, CURLOPT_FAILONERROR, opt.fail_on_error ? 1l : 0l);
-            curl_easy_setopt(handle_, CURLOPT_FOLLOWLOCATION, opt.follow_location ? 1l : 0l);
-            curl_easy_setopt(handle_, CURLOPT_AUTOREFERER, opt.auto_referer ? 1l : 0l);
-            curl_easy_setopt(handle_, CURLOPT_HTTPPROXYTUNNEL, opt.http_proxy_tunnel ? 1l : 0l);
+            ::curl_easy_setopt(handle_, CURLOPT_PROTOCOLS, opt.protocols);
+            ::curl_easy_setopt(handle_, CURLOPT_MAXREDIRS, opt.max_redirs);
+            ::curl_easy_setopt(handle_, CURLOPT_REDIR_PROTOCOLS, opt.redir_protocols);
+            ::curl_easy_setopt(handle_, CURLOPT_FAILONERROR, opt.fail_on_error ? 1l : 0l);
+            ::curl_easy_setopt(handle_, CURLOPT_FOLLOWLOCATION, opt.follow_location ? 1l : 0l);
+            ::curl_easy_setopt(handle_, CURLOPT_AUTOREFERER, opt.auto_referer ? 1l : 0l);
+            ::curl_easy_setopt(handle_, CURLOPT_HTTPPROXYTUNNEL, opt.http_proxy_tunnel ? 1l : 0l);
             if (!opt.proxy.empty())
-                curl_easy_setopt(handle_, CURLOPT_PROXY, opt.proxy.c_str());
+                ::curl_easy_setopt(handle_, CURLOPT_PROXY, opt.proxy.c_str());
             if (!opt.no_proxy.empty())
-                curl_easy_setopt(handle_, CURLOPT_NOPROXY, opt.no_proxy.c_str());
+                ::curl_easy_setopt(handle_, CURLOPT_NOPROXY, opt.no_proxy.c_str());
             if (!opt.proxy_username.empty() || !opt.proxy_password.empty())
             {
-                curl_easy_setopt(handle_, CURLOPT_PROXYUSERNAME, opt.proxy_username.c_str());
-                curl_easy_setopt(handle_, CURLOPT_PROXYPASSWORD, opt.proxy_password.c_str());
+                ::curl_easy_setopt(handle_, CURLOPT_PROXYUSERNAME, opt.proxy_username.c_str());
+                ::curl_easy_setopt(handle_, CURLOPT_PROXYPASSWORD, opt.proxy_password.c_str());
             }
-            curl_easy_setopt(handle_, CURLOPT_PROXYPORT, opt.proxy_port);
-            curl_easy_setopt(handle_, CURLOPT_PROXYTYPE, opt.proxy_type);
+            ::curl_easy_setopt(handle_, CURLOPT_PROXYPORT, opt.proxy_port);
+            ::curl_easy_setopt(handle_, CURLOPT_PROXYTYPE, opt.proxy_type);
             if (opt.accept_all_supported_encodings)
-                curl_easy_setopt(handle_, CURLOPT_ACCEPT_ENCODING, "");
+                ::curl_easy_setopt(handle_, CURLOPT_ACCEPT_ENCODING, "");
             else
-                curl_easy_setopt(handle_, CURLOPT_ACCEPT_ENCODING, opt.accept_encoding.empty() ? NULL : opt.accept_encoding.c_str());
+                ::curl_easy_setopt(handle_, CURLOPT_ACCEPT_ENCODING, opt.accept_encoding.empty() ? NULL : opt.accept_encoding.c_str());
             if (!opt.referer.empty())
-                curl_easy_setopt(handle_, CURLOPT_REFERER, opt.referer.c_str());
+                ::curl_easy_setopt(handle_, CURLOPT_REFERER, opt.referer.c_str());
             if (!opt.useragent.empty())
-                curl_easy_setopt(handle_, CURLOPT_USERAGENT, opt.useragent.c_str());
+                ::curl_easy_setopt(handle_, CURLOPT_USERAGENT, opt.useragent.c_str());
             if (!opt.http_header.empty())
             {
                 for (std::list<std::string>::const_iterator it(opt.http_header.begin()); it != opt.http_header.end(); ++it)
                 {
-                    curl_slist *new_list = curl_slist_append(httpheader_, it->c_str());
+                    curl_slist *new_list = ::curl_slist_append(httpheader_, it->c_str());
                     if (!new_list)
                         return false;
                     httpheader_ = new_list;
                 }
                 
-                curl_easy_setopt(handle_, CURLOPT_HTTPHEADER, httpheader_);
+                ::curl_easy_setopt(handle_, CURLOPT_HTTPHEADER, httpheader_);
             }
             
             if (!opt.interface.empty())
-                curl_easy_setopt(handle_, CURLOPT_INTERFACE, ("if!" + opt.interface).c_str());
+                ::curl_easy_setopt(handle_, CURLOPT_INTERFACE, ("if!" + opt.interface).c_str());
             
-            curl_easy_setopt(handle_, CURLOPT_WRITEFUNCTION, curl_write_function);
-            curl_easy_setopt(handle_, CURLOPT_WRITEDATA, this);
+            ::curl_easy_setopt(handle_, CURLOPT_WRITEFUNCTION, curl_write_function);
+            ::curl_easy_setopt(handle_, CURLOPT_WRITEDATA, this);
             
-            curl_easy_setopt(handle_, CURLOPT_READFUNCTION, curl_read_function);
-            curl_easy_setopt(handle_, CURLOPT_READDATA, this);
+            ::curl_easy_setopt(handle_, CURLOPT_READFUNCTION, curl_read_function);
+            ::curl_easy_setopt(handle_, CURLOPT_READDATA, this);
             
-            curl_easy_setopt(handle_, CURLOPT_HEADERFUNCTION, curl_header_function);
-            curl_easy_setopt(handle_, CURLOPT_HEADERDATA, this);
+            ::curl_easy_setopt(handle_, CURLOPT_HEADERFUNCTION, curl_header_function);
+            ::curl_easy_setopt(handle_, CURLOPT_HEADERDATA, this);
             
             url_ = uri;
             return true;
@@ -525,22 +525,22 @@ public:
             CURL_ASIO_LOGSCOPE("transfer::init", this);
             
             if (handle_)
-                curl_easy_reset(handle_);
+                ::curl_easy_reset(handle_);
             else
             {
-                handle_ = curl_easy_init();
+                handle_ = ::curl_easy_init();
                 if (!handle_)
                     return false;
             }
             
             if (httpheader_)
             {
-                curl_slist_free_all(httpheader_);
+                ::curl_slist_free_all(httpheader_);
                 httpheader_ = NULL;
             }
             
-            curl_easy_setopt(handle_, CURLOPT_PRIVATE, this);
-            curl_easy_setopt(handle_, CURLOPT_NOSIGNAL, 1l);
+            ::curl_easy_setopt(handle_, CURLOPT_PRIVATE, this);
+            ::curl_easy_setopt(handle_, CURLOPT_NOSIGNAL, 1l);
             return true;
         }
         
@@ -742,7 +742,29 @@ private:
         {
 #if defined(_WIN32) || defined(_WIN64)
             WSAPROTOCOL_INFO info;
-            return ::WSADuplicateSocket(s, ::GetCurrentProcessId(), &info);
+            if (::WSADuplicateSocket((SOCKET)s, ::GetCurrentProcessId(), &info) == 0)
+            {
+                DWORD dwOldFlags, dwNewFlags = WSA_FLAG_OVERLAPPED;
+                if (::GetHandleInformation((HANDLE)s, &dwOldFlags))
+                {
+                    if (!(dwOldFlags & HANDLE_FLAG_INHERIT))
+                        dwNewFlags |= WSA_FLAG_NO_HANDLE_INHERIT;
+                }
+                if (info.dwServiceFlags1 & XP1_SUPPORT_MULTIPOINT)
+                {
+                    if (info.dwServiceFlags1 & XP1_MULTIPOINT_CONTROL_PLANE)
+                        dwNewFlags |= WSA_FLAG_MULTIPOINT_C_ROOT;
+                    else
+                        dwNewFlags |= WSA_FLAG_MULTIPOINT_C_LEAF;
+                    if (info.dwServiceFlags1 & XP1_MULTIPOINT_DATA_PLANE)
+                        dwNewFlags |= WSA_FLAG_MULTIPOINT_D_ROOT;
+                    else
+                        dwNewFlags |= WSA_FLAG_MULTIPOINT_D_LEAF;
+                }
+                return ::WSASocket(info.iAddressFamily, info.iSocketType, info.iProtocol, &info, 0, dwNewFlags);
+            }
+
+            return INVALID_SOCKET;
 #else
             return ::dup(s);
 #endif
@@ -848,7 +870,7 @@ private:
         
         virtual ~implementation()
         {
-            curl_multi_cleanup(curl_);
+            ::curl_multi_cleanup(curl_);
         }
         
         void terminate()
@@ -875,7 +897,7 @@ private:
             
             if (!terminated_)
             {
-                CURLMcode rc = curl_multi_add_handle(curl_, trans->handle_);
+                CURLMcode rc = ::curl_multi_add_handle(curl_, trans->handle_);
                 if (rc <= CURLM_OK)
                 {
                     transfers_.insert(trans);
@@ -889,7 +911,7 @@ private:
         
         bool remove_transfer(boost::shared_ptr<transfer> trans)
         {
-            CURLMcode rc = curl_multi_remove_handle(curl_, trans->handle_);
+            CURLMcode rc = ::curl_multi_remove_handle(curl_, trans->handle_);
             if (rc <= CURLM_OK)
             {
                 transfer_set_t::iterator it(transfers_.find(trans));
@@ -928,29 +950,30 @@ private:
               running_(0),
               terminated_(false)
         {
-            curl_ = curl_multi_init();
+            curl_ = ::curl_multi_init();
             assert(curl_);
             
-            curl_multi_setopt(curl_, CURLMOPT_SOCKETFUNCTION, curl_socket_function);
-            curl_multi_setopt(curl_, CURLMOPT_SOCKETDATA, this);
-            curl_multi_setopt(curl_, CURLMOPT_TIMERFUNCTION, curl_timer_function);
-            curl_multi_setopt(curl_, CURLMOPT_TIMERDATA, this);
+            ::curl_multi_setopt(curl_, CURLMOPT_SOCKETFUNCTION, curl_socket_function);
+            ::curl_multi_setopt(curl_, CURLMOPT_SOCKETDATA, this);
+            ::curl_multi_setopt(curl_, CURLMOPT_TIMERFUNCTION, curl_timer_function);
+            ::curl_multi_setopt(curl_, CURLMOPT_TIMERDATA, this);
         }
         
         void process_curl_messages()
         {
             int msgs;
-            while (CURLMsg* msg = curl_multi_info_read(curl_, &msgs))
+            while (CURLMsg* msg = ::curl_multi_info_read(curl_, &msgs))
             {
                 if (msg->msg == CURLMSG_DONE)
                 {
+                    CURLcode code = msg->data.result;
                     boost::shared_ptr<transfer> trans(transfer::from_easy(msg->easy_handle));
                     assert(trans);
                     if (!remove_transfer(trans))
                     {
                         CURL_ASIO_LOG("Could not remove easy handle");
                     }
-                    trans->handle_done(msg->data.result);
+                    trans->handle_done(code);
                 }
             }
         }
@@ -980,7 +1003,7 @@ private:
                 callback_protector protector(callback_recursions_);
                 
                 CURL_ASIO_LOG("implementation::async_wait_complete(s=%d, action=%d)", s, action);
-                CURLMcode rc = curl_multi_socket_action(curl_, s, action, &running_);
+                CURLMcode rc = ::curl_multi_socket_action(curl_, s, action, &running_);
                 if (rc <= CURLM_OK)
                 {
                     process_curl_messages();
@@ -1003,7 +1026,7 @@ private:
                 if (sock)
                 {
                     sock->remove();
-                    curl_multi_assign(curl_, s, NULL);
+                    ::curl_multi_assign(curl_, s, NULL);
                 }
                 
                 if (it != sockets_.end())
@@ -1019,7 +1042,7 @@ private:
                 
                 if (it == sockets_.end() && sock)
                 {
-                    curl_multi_assign(curl_, s, sock->add());
+                    ::curl_multi_assign(curl_, s, sock->add());
                     it = sockets_.insert(std::make_pair(s, sock)).first;
                 }
                 
@@ -1045,7 +1068,7 @@ private:
             if (!err)
             {
                 callback_protector protector(callback_recursions_);
-                CURLMcode rc = curl_multi_socket_action(curl_, CURL_SOCKET_TIMEOUT, 0, &running_);
+                CURLMcode rc = ::curl_multi_socket_action(curl_, CURL_SOCKET_TIMEOUT, 0, &running_);
                 if (rc <= CURLM_OK)
                     process_curl_messages();
             }
